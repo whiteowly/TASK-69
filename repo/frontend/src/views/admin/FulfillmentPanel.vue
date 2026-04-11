@@ -42,7 +42,9 @@ function nextStates(status: string): string[] {
 
 function isOverdue(order: OrderItem): boolean {
   if (!['PACKED', 'SHIPPED'].includes(order.status)) return false
-  const statusDate = order.statusChangedAt ? new Date(order.statusChangedAt) : new Date(order.updatedAt)
+  const dateStr = order.statusChangedAt ?? order.updatedAt
+  if (!dateStr) return false
+  const statusDate = new Date(dateStr)
   const now = new Date()
   const days = (now.getTime() - statusDate.getTime()) / (1000 * 60 * 60 * 24)
   return days > 7

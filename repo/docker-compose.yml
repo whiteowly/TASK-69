@@ -1,0 +1,62 @@
+services:
+  bootstrap:
+    image: alpine:3.19
+    volumes:
+      - secrets-vol:/run/secrets
+      - ./bootstrap:/bootstrap:ro
+    entrypoint: /bootstrap/generate-secrets.sh
+    restart: "no"
+
+  db:
+    image: mysql:8.0
+    volumes:
+      - secrets-vol:/run/secrets:ro
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    entrypoint:
+      - sh
+      - -c
+      - |
+        export MYSQL_ROOT_PASSWORD=$$(cat /run/secrets/db_root_password)
+        export MYSQL_DATABASE=$$(cat /run/secrets/db_name)
+        export MYSQL_USER=$$(cat /run/secrets/db_username)
+        export MYSQL_PASSWORD=$$(cat /run/secrets/db_password)
+        exec docker-entrypoint.sh mysqld
+
+  backend:
+    build: ./backend
+    volumes:
+      - secrets-vol:/run/secrets:ro
+      - file-storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint:
+      - sh
+      - -c
+      - |
+        export DB_URL="jdbc:mysql://db:3306/$$(cat /run/secrets/db_name)?useSSL=false&allowPublicKeyRetrieval=true"
+        export DB_USERNAME=$$(cat /run/secrets/db_username)
+        export DB_PASSWORD=$$(cat /run/secrets/db_password)
+        export CROH_ENCRYPTION_KEY=$$(cat /run/secrets/encryption_key)
+        exec java -jar /app/app.jar
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "127.0.0.1::3000"
+    depends_on:
+      - backend
+
+volumes:
+  secrets-vol:
+  db-data:
+  file-storage:

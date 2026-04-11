@@ -1,0 +1,66 @@
+import { APIRequestContext } from '@playwright/test';
+
+/**
+ * Registers a new account and returns the response.
+ */
+export async function registerAccount(
+  request: APIRequestContext,
+  username: string,
+  password: string = 'TestPass123!'
+) {
+  const res = await request.post('/api/v1/auth/register', {
+    data: { username, password, accountType: 'PERSON' },
+  });
+  return res;
+}
+
+/**
+ * Logs in and returns a cookie-bearing request context via the response.
+ * Playwright automatically tracks cookies per context.
+ */
+export async function login(
+  request: APIRequestContext,
+  username: string,
+  password: string = 'TestPass123!'
+) {
+  const res = await request.post('/api/v1/auth/login', {
+    data: { username, password },
+  });
+  return res;
+}
+
+/**
+ * Gets current XSRF token from cookies and returns headers needed for state-changing requests.
+ */
+export async function getCsrfHeaders(request: APIRequestContext): Promise<Record<string, string>> {
+  // The XSRF-TOKEN cookie is set by Spring Security on any response.
+  // We need to read it and send it back as X-XSRF-TOKEN header.
+  const meRes = await request.get('/api/v1/auth/me');
+  const headersArr = await meRes.headersArray();
+  const setCookieHeaders = headersArr
+    .filter(h => h.name.toLowerCase() === 'set-cookie')
+    .map(h => h.value);
+  const allCookies = setCookieHeaders.join('; ');
+  const xsrfMatch = allCookies.match(/XSRF-TOKEN=([^;]+)/);
+  const token = xsrfMatch ? xsrfMatch[1] : 'missing';
+  return { 'X-XSRF-TOKEN': token };
+}
+
+/**
+ * Register + login helper. Returns CSRF headers for subsequent calls.
+ */
+export async function registerAndLogin(
+  request: APIRequestContext,
+  username: string,
+  password: string = 'TestPass123!'
+): Promise<Record<string, string>> {
+  await registerAccount(request, username, password);
+  await login(request, username, password);
+  return getCsrfHeaders(request);
+}
+
+/** Unique username generator */
+let counter = 0;
+export function uniqueUser(prefix: string = 'user'): string {
+  return `${prefix}_${Date.now()}_${counter++}`;
+}

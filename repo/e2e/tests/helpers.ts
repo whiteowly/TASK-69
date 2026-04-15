@@ -64,3 +64,45 @@ let counter = 0;
 export function uniqueUser(prefix: string = 'user'): string {
   return `${prefix}_${Date.now()}_${counter++}`;
 }
+
+/**
+ * Seeded credentials baked in by e2e/seed-e2e-data.sh.
+ * These accounts have ADMIN / ORG_OPERATOR / PARTICIPANT roles approved.
+ */
+export const SEEDED = {
+  admin: { username: 'e2e_admin', password: 'SecurePass99' },
+  org: { username: 'e2e_org', password: 'SecurePass99' },
+  participant: { username: 'e2e_participant', password: 'SecurePass99' },
+};
+
+/**
+ * Login as a seeded role and return CSRF headers ready for state-changing requests.
+ * Throws if the seeded account isn't available — the test suite assumes the seed has run.
+ */
+export async function loginAsSeeded(
+  request: APIRequestContext,
+  role: 'admin' | 'org' | 'participant'
+): Promise<Record<string, string>> {
+  const creds = SEEDED[role];
+  const res = await login(request, creds.username, creds.password);
+  if (res.status() !== 200) {
+    throw new Error(
+      `loginAsSeeded(${role}) failed with ${res.status()} — ensure e2e/seed-e2e-data.sh ran`
+    );
+  }
+  return getCsrfHeaders(request);
+}
+
+/**
+ * Read accountId from the /auth/me payload. Useful when tests need to
+ * blacklist / target the currently-logged-in user.
+ */
+export async function whoAmI(
+  request: APIRequestContext
+): Promise<{ accountId: number; username: string; activeRole: string; approvedRoles: string[]; permissions: string[] }> {
+  const res = await request.get('/api/v1/auth/me');
+  if (res.status() !== 200) {
+    throw new Error(`whoAmI: /me returned ${res.status()}`);
+  }
+  return res.json();
+}

@@ -2,7 +2,21 @@
 # Seeds E2E test data: creates admin and org_operator accounts with approved roles.
 set -euo pipefail
 
-DB_CONTAINER="repo-db-1"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT_DIR"
+
+DB_CONTAINER=$(docker compose -f docker-compose.yml ps -q db)
+if [ -z "$DB_CONTAINER" ]; then
+  echo "ERROR: db container not found. Start stack first with docker compose up --build -d"
+  exit 1
+fi
+
+NETWORK=$(docker inspect "$DB_CONTAINER" --format '{{range $k, $v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -n 1)
+if [ -z "$NETWORK" ]; then
+  echo "ERROR: could not determine compose network"
+  exit 1
+fi
+
 DB_NAME=$(docker exec "$DB_CONTAINER" sh -c 'cat /run/secrets/db_name')
 DB_USER=$(docker exec "$DB_CONTAINER" sh -c 'cat /run/secrets/db_username')
 DB_PASS=$(docker exec "$DB_CONTAINER" sh -c 'cat /run/secrets/db_password')
@@ -16,7 +30,7 @@ BASE_URL="${BASE_URL:-http://frontend:3000}"
 register() {
   local username="$1"
   local res
-  res=$(docker run --rm --network repo_default curlimages/curl:latest \
+  res=$(docker run --rm --network "$NETWORK" curlimages/curl:latest \
     --max-time 10 -sS -X POST \
     -H "Content-Type: application/json" \
     -d "{\"username\":\"$username\",\"password\":\"SecurePass99\",\"accountType\":\"PERSON\"}" \
@@ -48,19 +62,19 @@ echo "Roles assigned."
 
 # Seed a reward via API as admin
 echo "Seeding reward..."
-ADMIN_COOKIE=$(docker run --rm --network repo_default curlimages/curl:latest \
+ADMIN_COOKIE=$(docker run --rm --network "$NETWORK" curlimages/curl:latest \
   --max-time 10 -sS -c - -X POST \
   -H "Content-Type: application/json" \
   -d '{"username":"e2e_admin","password":"SecurePass99"}' \
   "$BASE_URL/api/v1/auth/login" 2>/dev/null | grep -v "^#" | grep -v "^$" || true)
 
 # Get XSRF token
-XSRF=$(docker run --rm --network repo_default curlimages/curl:latest \
+XSRF=$(docker run --rm --network "$NETWORK" curlimages/curl:latest \
   --max-time 10 -sS -c - -b - -X GET \
   "$BASE_URL/api/v1/auth/me" 2>/dev/null | grep "XSRF-TOKEN" | awk '{print $NF}' || true)
 
 # Create reward (ignore errors if already exists)
-docker run --rm --network repo_default curlimages/curl:latest \
+docker run --rm --network "$NETWORK" curlimages/curl:latest \
   --max-time 10 -sS -X POST \
   -H "Content-Type: application/json" \
   -H "X-XSRF-TOKEN: $XSRF" \

@@ -42,9 +42,15 @@ for i in $(seq 1 30); do
   sleep 2
 done
 NETWORK=$(docker network ls --format '{{.Name}}' | grep repo | head -1)
-if docker run --rm --network "$NETWORK" -v "$(pwd)/e2e":/e2e -w /e2e -e BASE_URL=http://frontend:3000 node:20-alpine sh -c "npm install --ignore-scripts 2>/dev/null && npx playwright test --project=api --reporter=line 2>&1"; then
-  echo "E2E tests: PASSED"
+if bash ./e2e/seed-e2e-data.sh; then
+  if docker run --rm --network "$NETWORK" -v "$(pwd)/e2e":/e2e -w /e2e -e BASE_URL=http://frontend:3000 node:20-alpine sh -c "npm install --ignore-scripts 2>/dev/null && npx playwright test --project=api --reporter=line 2>&1"; then
+    echo "E2E tests: PASSED"
+  else
+    echo "E2E tests: FAILED"
+    FAILURES=$((FAILURES + 1))
+  fi
 else
+  echo "E2E seed: FAILED"
   echo "E2E tests: FAILED"
   FAILURES=$((FAILURES + 1))
 fi

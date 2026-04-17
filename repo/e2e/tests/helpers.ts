@@ -15,6 +15,21 @@ export async function registerAccount(
 }
 
 /**
+ * Registers a new account with explicit account type.
+ */
+export async function registerAccountWithType(
+  request: APIRequestContext,
+  username: string,
+  accountType: 'PERSON' | 'ORGANIZATION',
+  password: string = 'TestPass123!'
+) {
+  const res = await request.post('/api/v1/auth/register', {
+    data: { username, password, accountType },
+  });
+  return res;
+}
+
+/**
  * Logs in and returns a cookie-bearing request context via the response.
  * Playwright automatically tracks cookies per context.
  */

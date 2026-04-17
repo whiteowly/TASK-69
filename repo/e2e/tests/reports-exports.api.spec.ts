@@ -151,6 +151,12 @@ test.describe('Reports / metric definitions / templates / executions', () => {
     expect(res.status()).toBe(403);
   });
 
+  test('admin download endpoint is reachable for missing execution id (400/404)', async ({ request }) => {
+    await loginAsSeeded(request, 'admin');
+    const res = await request.get('/api/v1/reports/executions/9999999/download');
+    expect([400, 404]).toContain(res.status());
+  });
+
   test('PARTICIPANT cannot read /exports/{id} (403)', async ({ request }) => {
     const u = uniqueUser('noexpid');
     await registerAndLogin(request, u);
